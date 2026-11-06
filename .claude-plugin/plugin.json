@@ -1,0 +1,10 @@
+{
+  "name": "clean-view",
+  "version": "0.2.0",
+  "description": "A panel beside the chat that shows only your messages and Claude's final answers. /clean opens or closes it.",
+  "author": { "name": "xy-lin" },
+  "license": "MIT",
+  "homepage": "https://github.com/xy-lin/clean-view",
+  "repository": "https://github.com/xy-lin/clean-view",
+  "types": "./types/index.d.ts"
+}

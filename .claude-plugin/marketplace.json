@@ -1,0 +1,8 @@
+{
+  "name": "clean-view",
+  "owner": { "name": "xy-lin" },
+  "metadata": {
+    "description": "clean-view: a Claude Code panel that shows only your messages and Claude's final answers."
+  },
+  "plugins": [{ "name": "clean-view", "source": "./" }]
+}
