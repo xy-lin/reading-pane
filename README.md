@@ -3,13 +3,9 @@
 A Claude Code mod that adds a **reading pane** beside the chat. The panel shows only
 what is meant for you to read: the messages you typed, and Claude's final answer to each
 one. Tool calls, command output, diffs and Claude's in-between notes stay in the main chat,
-which is not changed.
+which is not changed. A resumed chat fills the panel from its history.
 
 ![The reading pane on the right shows only the question and Claude's answer, while the chat on the left shows all the work](docs/screenshot.png)
-
-- Your messages sit in blue frames; Claude's answers sit in orange frames, drawn as
-  Markdown. The colours follow your Claude Code theme.
-- A resumed chat fills the panel from its history.
 
 ## Install
 
