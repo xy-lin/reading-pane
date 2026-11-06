@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On, SessionMessage, UiPane } from 'claude-code'
 
-import { fromTranscript, typed } from '../hooks/register'
+import { fromTranscript, stamp, typed } from '../hooks/register'
 
 // A chat so far: context the engine added, a prompt, a note before a tool
 // call, the tool's result, the final answer, a background notice and its own
@@ -42,11 +42,14 @@ const PANE = {
   },
 } as const
 
+// 21:10 on 6 Nov 2026, local time: the engine's clock in these tests.
+const NINE_TEN_PM = new Date(2026, 10, 6, 21, 10).getTime()
+
 // The engine beneath the mod, with a record of the panes it opened and closed.
 async function engine($: Engine, on: On, rows: SessionMessage[] = ROWS) {
   const log: string[] = []
   let panes: UiPane[] = []
-  let now = 0
+  let now = NINE_TEN_PM
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: { command: 'clean' } }))
   on('session.messages', () => ({ value: rows }))
@@ -144,4 +147,34 @@ test('/clean closes the open panel, and opens it again', async ($, on) => {
   const opened = await $.command.run({ command: 'clean', args: '', origin, presentation })
   expect(opened.text).toMatch(/opened/)
   expect(log).toEqual(['open clean-view 1000', 'close clean-view', 'open clean-view 122'])
+})
+
+test('a time reads "21:10" today and "5 Nov 21:10" on an earlier day', () => {
+  const at = new Date(2026, 10, 5, 21, 10).getTime()
+  expect(stamp(at, new Date(2026, 10, 5, 23, 59).getTime())).toBe('21:10')
+  expect(stamp(at, new Date(2026, 10, 6, 9, 0).getTime())).toBe('5 Nov 21:10')
+  expect(stamp(new Date(2026, 0, 2, 7, 5).getTime(), at)).toBe('2 Jan 07:05')
+})
+
+test('each new message shows its time at the end of its name row', async ($, on) => {
+  await engine($, on, [])
+  await $.prompt.submit(you('what is the weather?'))
+  await $.turn.complete(answer('Sunny, 14°C.'))
+
+  const ui = await $.ui.mount(PANE)
+  // "21:10" on 6 Nov 2026; "6 Nov 21:10" when the test runs on a later day.
+  expect(await ui.findAll({ type: 'Text', text: /21:10$/ })).toHaveLength(2)
+  await ui.unmount()
+})
+
+test('a reload keeps the times; older messages show none', async ($, on) => {
+  await engine($, on)
+  await $.prompt.submit(you('fix the typo in notes.md'))
+  // A reload rebuilds the panel from the transcript, which keeps no times.
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  const ui = await $.ui.mount(PANE)
+  expect(await ui.findAll({ type: 'Text', text: /21:10$/ })).toHaveLength(1)
+  expect(await ui.find({ type: 'Markdown', text: /The background job finished/ })).toBeDefined()
+  await ui.unmount()
 })

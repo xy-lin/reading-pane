@@ -7,6 +7,9 @@ which is not changed.
 
 - Your messages sit in blue frames; Claude's answers sit in orange frames, drawn as
   Markdown. The colours follow your Claude Code theme.
+- Each message shows its time at the end of its name row ("21:10", or "5 Nov 21:10"
+  for an earlier day). Messages rebuilt from an older chat's history have no time, because
+  the transcript does not keep one.
 - The panel opens on its own when the terminal is wide enough. Type `/clean` to open or
   close it at any time.
 - It asks for the widest panel Claude Code allows: 45% of the window.

@@ -40,6 +40,20 @@ export function typed(text: string): string | undefined {
   return t
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+// A message's time, local: "21:10" today, "5 Nov 21:10" on an earlier day.
+export function stamp(at: number, now: number): string {
+  const d = new Date(at)
+  const today = new Date(now)
+  const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  const isToday =
+    d.getFullYear() === today.getFullYear() &&
+    d.getMonth() === today.getMonth() &&
+    d.getDate() === today.getDate()
+  return isToday ? time : `${d.getDate()} ${MONTHS[d.getMonth()]} ${time}`
+}
+
 // The clean conversation so far, rebuilt from the transcript: each message the
 // person typed, and each turn's final answer. Text written before a tool call
 // is a note, not an answer, so it is left out.
@@ -90,8 +104,9 @@ async function showNewest($: EngineInterface) {
 }
 
 async function add($: EngineInterface, who: Entry['who'], text: string) {
-  const id = `${who}-${await $.clock.now()}`
-  await update($, entries, list => [...list, { id, who, text }].slice(-KEEP))
+  const at = await $.clock.now()
+  const id = `${who}-${at}`
+  await update($, entries, list => [...list, { id, who, text, at }].slice(-KEEP))
   await showNewest($)
 }
 
@@ -107,8 +122,17 @@ export const register: Register = on => {
       description: 'Open or close the clean view panel (your messages and my answers only)',
     })
     // Rebuilt at every start and reload, so a resumed chat fills the panel too.
+    // The transcript keeps no times, so each message keeps the time the panel
+    // already had for it (after a reload); older ones show none.
     try {
-      const rebuilt = fromTranscript(await $.session.messages()).slice(-KEEP)
+      const held = await read($, entries)
+      const times = new Map(held.map(entry => [`${entry.who}\n${entry.text}`, entry.at]))
+      const rebuilt = fromTranscript(await $.session.messages())
+        .slice(-KEEP)
+        .map(entry => {
+          const at = times.get(`${entry.who}\n${entry.text}`)
+          return at === undefined ? entry : { ...entry, at }
+        })
       await update($, entries, () => rebuilt)
     } catch {
       // keep what the panel had
@@ -167,10 +191,19 @@ export const register: Register = on => {
   })
 
   // Each message in a rounded frame: the person's in blue, the answers in
-  // orange, each with its name on top.
+  // orange. The top row holds the name, and the time at the end of the row.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Markdown } = $.ui.resolve(e)
     const list = await read($, entries)
+    const now = Date.now()
+    const top = (name: string, color: string, entry: Entry) => (
+      <Box flexDirection="row" justifyContent="space-between">
+        <Text color={color} bold>
+          {name}
+        </Text>
+        {entry.at === undefined ? null : <Text dimColor>{stamp(entry.at, now)}</Text>}
+      </Box>
+    )
     if (list.length === 0) {
       return <Text dimColor>Your messages and my answers will show here.</Text>
     }
@@ -186,9 +219,7 @@ export const register: Register = on => {
               borderColor={YOU}
               paddingX={1}
             >
-              <Text color={YOU} bold>
-                You
-              </Text>
+              {top('You', YOU, entry)}
               <Text color={YOU}>
                 {entry.text.length > 500 ? `${entry.text.slice(0, 500)}…` : entry.text}
               </Text>
@@ -201,9 +232,7 @@ export const register: Register = on => {
               borderColor={ME}
               paddingX={1}
             >
-              <Text color={ME} bold>
-                Claude
-              </Text>
+              {top('Claude', ME, entry)}
               <Markdown text={entry.text} />
             </Box>
           ),
