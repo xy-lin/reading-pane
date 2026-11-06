@@ -39,11 +39,8 @@ In the desktop app, where `/plugin` does not run: click **+** next to the prompt
 
 ### Show or hide the panel
 
-Any of these:
-
-- Type `/clean` and press Enter.
 - Click **◧ clean view** at the end of the hint line under the prompt box.
-- Press your shortcut key, once you have set one (see below).
+- Or press your shortcut key, once you have set one (see below).
 
 ### Set the names
 
