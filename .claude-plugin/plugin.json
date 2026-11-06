@@ -1,10 +1,26 @@
 {
   "name": "clean-view",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A panel beside the chat that shows only your messages and Claude's final answers. /clean opens or closes it.",
-  "author": { "name": "xy-lin" },
+  "author": {
+    "name": "xy-lin"
+  },
   "license": "MIT",
   "homepage": "https://github.com/xy-lin/clean-view",
   "repository": "https://github.com/xy-lin/clean-view",
+  "userConfig": {
+    "yourName": {
+      "type": "string",
+      "title": "Your name",
+      "description": "The name above your messages in the clean view panel.",
+      "default": "You"
+    },
+    "claudeName": {
+      "type": "string",
+      "title": "Claude's name",
+      "description": "The name above Claude's answers in the clean view panel.",
+      "default": "Claude"
+    }
+  },
   "types": "./types/index.d.ts"
 }

@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On, SessionMessage, UiPane } from 'claude-code'
 
-import { fromTranscript, stamp, typed } from '../hooks/register'
+import { fromTranscript, nameOf, stamp, typed } from '../hooks/register'
 
 // A chat so far: context the engine added, a prompt, a note before a tool
 // call, the tool's result, the final answer, a background notice and its own
@@ -207,5 +207,24 @@ test('the button hides the panel, then shows it again', async ($, on) => {
   await ui.press({ key: 'toggle' })
   await ui.press({ key: 'toggle' })
   expect(log).toEqual(['open clean-view 1000', 'close clean-view', 'open clean-view 1000'])
+  await ui.unmount()
+})
+
+test('names come from the settings, or fall back to the defaults', () => {
+  expect(nameOf('  Xinyu ', 'You')).toBe('Xinyu')
+  expect(nameOf('', 'You')).toBe('You')
+  expect(nameOf(undefined, 'Claude')).toBe('Claude')
+  expect(nameOf('x'.repeat(60), 'You')).toHaveLength(40)
+})
+
+test('the panel shows the names set in /config', { options: { yourName: 'Xinyu', claudeName: 'CASK' } }, async ($, on) => {
+  await engine($, on, [])
+  await $.prompt.submit(you('hello'))
+  await $.turn.complete(answer('Hi.'))
+
+  const ui = await $.ui.mount(PANE)
+  expect((await ui.find({ type: 'Text', text: /^Xinyu$/ }))?.props.color).toBe('suggestion')
+  expect((await ui.find({ type: 'Text', text: /^CASK$/ }))?.props.color).toBe('claude')
+  expect(await ui.find({ type: 'Text', text: /^You$/ })).toBeUndefined()
   await ui.unmount()
 })

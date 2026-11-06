@@ -13,6 +13,8 @@ which is not changed.
 - The panel opens on its own when the terminal is wide enough. To show or hide it, type
   `/clean`, click **◧ clean view** at the end of the hint line under the prompt box, or
   press your shortcut (see below).
+- The names above the messages are yours to set: "You" and "Claude" unless you change
+  them, at install time or later in `/config` ("Your name" and "Claude's name").
 - It asks for the widest panel Claude Code allows: 45% of the window.
 - A resumed chat fills the panel from its history.
 

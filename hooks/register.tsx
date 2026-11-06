@@ -24,6 +24,12 @@ const WIDEST = 1000
 // button. Bind a key to it in ~/.claude/keybindings.json (see the README).
 const SHORTCUT = 'app:cycleDiffBase'
 
+// A name from the settings (/config): trimmed, kept short, else the default.
+export function nameOf(value: unknown, fallback: string): string {
+  const name = typeof value === 'string' ? value.trim() : ''
+  return name === '' ? fallback : name.slice(0, 40)
+}
+
 // Colours, as theme names so they follow the person's light or dark theme.
 const YOU = 'suggestion' // soft blue: the person's messages
 const ME = 'claude' // Claude orange: the answers
@@ -129,7 +135,13 @@ async function add($: EngineInterface, who: Entry['who'], text: string) {
   await showNewest($)
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  // The names above the messages, set in /config ("Your name", "Claude's name").
+  const names = {
+    you: nameOf(options.yourName, 'You'),
+    claude: nameOf(options.claudeName, 'Claude'),
+  }
+
   // False until session.start says so; `claude -p` runs stay untouched.
   let isInteractive = false
 
@@ -256,7 +268,7 @@ export const register: Register = on => {
               borderColor={YOU}
               paddingX={1}
             >
-              {top('You', YOU, entry)}
+              {top(names.you, YOU, entry)}
               <Text color={YOU}>
                 {entry.text.length > 500 ? `${entry.text.slice(0, 500)}…` : entry.text}
               </Text>
@@ -269,7 +281,7 @@ export const register: Register = on => {
               borderColor={ME}
               paddingX={1}
             >
-              {top('Claude', ME, entry)}
+              {top(names.claude, ME, entry)}
               <Markdown text={entry.text} />
             </Box>
           ),
