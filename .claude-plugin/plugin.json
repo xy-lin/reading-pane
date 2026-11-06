@@ -1,13 +1,27 @@
 {
   "name": "reading-pane",
-  "version": "0.5.2",
+  "displayName": "Reading pane",
+  "version": "0.5.3",
   "description": "A reading pane beside the chat that shows only your messages and Claude's final answers.",
   "author": {
     "name": "xy-lin"
   },
   "license": "MIT",
+  "keywords": [
+    "reading-pane",
+    "panel",
+    "sidebar",
+    "chat",
+    "conversation",
+    "answers",
+    "focus",
+    "readability"
+  ],
+  "icon": "./.claude-plugin/icon.png",
   "homepage": "https://github.com/xy-lin/reading-pane",
   "repository": "https://github.com/xy-lin/reading-pane",
+  "documentationUrl": "https://github.com/xy-lin/reading-pane#readme",
+  "supportUrl": "https://github.com/xy-lin/reading-pane/issues",
   "userConfig": {
     "yourName": {
       "type": "string",
