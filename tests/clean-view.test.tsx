@@ -68,6 +68,11 @@ async function engine($: Engine, on: On, rows: SessionMessage[] = ROWS) {
   on('ui.scroll', () => ({}))
   on('prompt.submit', (_, e) => ({ text: e.text }))
   on('turn.complete', (_, e) => ({ text: e.answer }))
+  // What the engine draws where the mod passes: the hint line's words.
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text dimColor>? for shortcuts</Text>
+  })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   return log
 }
@@ -176,5 +181,31 @@ test('a reload keeps the times; older messages show none', async ($, on) => {
   const ui = await $.ui.mount(PANE)
   expect(await ui.findAll({ type: 'Text', text: /21:10$/ })).toHaveLength(1)
   expect(await ui.find({ type: 'Markdown', text: /The background job finished/ })).toBeDefined()
+  await ui.unmount()
+})
+
+const HINT = {
+  plugin: 'clean-view',
+  surface: 'terminal',
+  component: 'PromptHint',
+  requestId: 'hint',
+  props: { isDraft: false, isWorking: false, hint: '? for shortcuts' },
+} as const
+
+test('the hint line keeps its words and gains the panel button', async ($, on) => {
+  await engine($, on)
+  const ui = await $.ui.mount(HINT)
+  expect(await ui.find({ type: 'Text', text: /for shortcuts/ })).toBeDefined()
+  const button = await ui.find({ type: 'Button', key: 'toggle' })
+  expect(button?.props.action).toBe('app:cycleDiffBase')
+  await ui.unmount()
+})
+
+test('the button hides the panel, then shows it again', async ($, on) => {
+  const log = await engine($, on)
+  const ui = await $.ui.mount(HINT)
+  await ui.press({ key: 'toggle' })
+  await ui.press({ key: 'toggle' })
+  expect(log).toEqual(['open clean-view 1000', 'close clean-view', 'open clean-view 1000'])
   await ui.unmount()
 })

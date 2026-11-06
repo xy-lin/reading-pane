@@ -1,7 +1,8 @@
 // clean-view: a panel beside the chat that shows only what is meant for the
 // person to read: the messages they typed and Claude's final answer to each.
 //
-// The chat itself is unchanged. /clean opens or closes the panel.
+// The chat itself is unchanged. /clean, or the "◧ clean view" button on the
+// hint line under the prompt (and the key bound to it), opens or closes it.
 
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionMessage } from 'claude-code'
@@ -16,6 +17,12 @@ const KEEP = 200 // the panel keeps the last 200 messages
 // that much; a bigger ask is cut down to it.
 const SHARE = 0.45
 const WIDEST = 1000
+
+// The key that shows or hides the panel. A mod cannot add a key action of its
+// own, so the hint-line button borrows this one: the engine handles it only
+// while its diff panel is open, and otherwise the key bound to it presses the
+// button. Bind a key to it in ~/.claude/keybindings.json (see the README).
+const SHORTCUT = 'app:cycleDiffBase'
 
 // Colours, as theme names so they follow the person's light or dark theme.
 const YOU = 'suggestion' // soft blue: the person's messages
@@ -103,6 +110,18 @@ async function showNewest($: EngineInterface) {
   }
 }
 
+// Closes the panel where it shows, else opens it: for /clean and the button.
+async function toggle($: EngineInterface, columns?: number): Promise<'opened' | 'closed'> {
+  const pane = (await $.ui.panes()).find(one => one.id === PANE)
+  if (pane?.isPlaced === true) {
+    await $.ui.close({ id: PANE })
+    return 'closed'
+  }
+  await openPanel($, columns)
+  await showNewest($)
+  return 'opened'
+}
+
 async function add($: EngineInterface, who: Entry['who'], text: string) {
   const at = await $.clock.now()
   const id = `${who}-${at}`
@@ -144,15 +163,33 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: 'clean' }, async ($, e) => {
-    const pane = (await $.ui.panes()).find(one => one.id === PANE)
-    if (pane?.isPlaced === true) {
-      await $.ui.close({ id: PANE })
-      return { text: 'Clean view panel closed. Type /clean to open it again.' }
-    }
-    await openPanel($, e.presentation.columns)
-    await showNewest($)
-    return { text: 'Clean view panel opened.' }
+  on('command.run', { command: 'clean' }, async ($, e) =>
+    (await toggle($, e.presentation.columns)) === 'closed'
+      ? { text: 'Clean view panel closed. Type /clean to open it again.' }
+      : { text: 'Clean view panel opened.' },
+  )
+
+  // The hint line under the prompt keeps its words, with the panel's button at
+  // the end. The button is always there, so its key works whether the panel
+  // shows or not.
+  on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
+    const line = await next(e)
+    const { Box, Button } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="row" justifyContent="space-between">
+        {line}
+        <Button
+          key="toggle"
+          label="◧ clean view"
+          plain
+          dimColor
+          action={SHORTCUT}
+          onPress={async () => {
+            await toggle($)
+          }}
+        />
+      </Box>
+    )
   })
 
   on('prompt.submit', async ($, e, next) => {
