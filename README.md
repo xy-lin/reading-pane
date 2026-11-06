@@ -90,6 +90,16 @@ Pick a key that Claude Code does not already use (see the
 [keybindings docs](https://code.claude.com/docs/en/keybindings)). While the diff panel is
 open, the key does its usual job there instead.
 
+## What it reads, runs and sends
+
+- **Reads:** the messages of the current chat (yours, and Claude's final answers), only to
+  show them in the panel. It keeps them in memory for that session alone.
+- **Runs:** only inside Claude Code, on your computer. It writes no files and starts no
+  programs.
+- **Sends:** nothing. It makes no network requests.
+- **Changes:** it adds one short note to Claude's system prompt (see below), and nothing
+  else in your settings.
+
 ## Good to know
 
 - The panel docks beside the chat in Claude Code's fullscreen layout, from 110 columns.
