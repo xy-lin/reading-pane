@@ -53,9 +53,16 @@ const entries = atom({ plugin: 'reading-pane', key: 'entries' } as const, [], {
   shape: 'entries-1',
 })
 
-// Read by the model, so the last text of each turn makes sense on its own.
+// Read by the model, so each turn's answer reads well in the panel.
 const NOTE = `# Reading pane
-The person may read this chat in a side panel that shows only their own messages and your final answer of each turn (the text of your last response in the turn). Make that final answer complete on its own: the outcome, what changed, and anything they must do. Do not point to tool output, diffs or notes "above": the panel does not show them.`
+The person may read this chat in a side panel that shows only their own messages and your answer of each turn: the text of your last response in the turn, plus any longer text you wrote earlier in the turn. Short progress notes before a tool call are left out. Write the answer last: finish any tool work first (saving notes, journal entries, commit messages), then write it. Make it complete on its own: the outcome, what changed, and anything they must do. Do not point to tool output, diffs or notes "above": the panel does not show them.`
+
+// Text written before a tool call is a progress note when it is short: one
+// line of under 200 characters. Longer text there is part of the answer.
+export function isProgressNote(text: string): boolean {
+  const t = text.trim()
+  return t.length < 200 && !t.includes('\n')
+}
 
 // What the person typed, without what the engine adds to a message. Undefined
 // for anything they did not type (reminders, notices, commands, interrupts).
@@ -122,23 +129,29 @@ export function tablesToLists(text: string): string {
 }
 
 // The clean conversation so far, rebuilt from the transcript: each message the
-// person typed, and each turn's final answer. Text written before a tool call
-// is a note, not an answer, so it is left out.
+// person typed, and Claude's answer to it, made of its texts in order. A short
+// progress note written before a tool call is left out.
 export function fromTranscript(rows: readonly SessionMessage[]): Entry[] {
   const out: Entry[] = []
-  let answer: string | undefined
+  let parts: string[] = [] // the answer so far
+  let latest: string | undefined // the latest text, until we know what follows it
+  const settle = (isBeforeTool: boolean) => {
+    if (latest !== undefined && !(isBeforeTool && isProgressNote(latest))) parts.push(latest)
+    latest = undefined
+  }
   const flush = () => {
-    if (answer !== undefined) out.push({ id: `t${out.length}`, who: 'claude', text: answer })
-    answer = undefined
+    settle(false)
+    if (parts.length > 0) out.push({ id: `t${out.length}`, who: 'claude', text: parts.join('\n\n') })
+    parts = []
   }
   for (const row of rows) {
     if (row.role === 'assistant') {
       const text = row.text.trim()
       if (text !== '') {
-        flush() // an earlier answer with no tool call after it was final
-        answer = text
+        settle(false) // another text came next, not a tool call
+        latest = text
       }
-      if (row.toolUses.length > 0) answer = undefined
+      if (row.toolUses.length > 0) settle(true)
       continue
     }
     if (row.toolResults !== undefined && row.toolResults.length > 0) continue
@@ -335,8 +348,30 @@ export const register: Register = (on, options) => {
     return next(e)
   }).catch(($, e, next) => next(e)) // a fault here never holds up a prompt
 
+  // The longer texts Claude wrote before a tool call, per running turn: they are
+  // part of that turn's answer. Each step is passed on unchanged.
+  const earlier = new Map<string, string[]>()
+
+  on('turn.step', async function* ($, e, next) {
+    const result = yield* next(e)
+    try {
+      const text = result.answer.trim()
+      const isPart = text !== '' && result.toolUses.length > 0 && !isProgressNote(text)
+      if (isInteractive && e.agentId === undefined && isPart) {
+        earlier.set(e.turnId, [...(earlier.get(e.turnId) ?? []), text])
+      }
+    } catch {
+      // the panel may miss a part of the answer; the step goes on
+    }
+    return result
+  })
+
   on('turn.complete', async ($, e, next) => {
-    const text = e.answer.trim()
+    const parts = earlier.get(e.turnId) ?? []
+    earlier.delete(e.turnId)
+    const last = e.answer.trim()
+    if (last !== '' && last !== parts[parts.length - 1]) parts.push(last)
+    const text = parts.join('\n\n')
     if (isInteractive && e.agentId === undefined && text !== '') {
       try {
         await add($, 'claude', text)

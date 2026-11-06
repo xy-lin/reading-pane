@@ -1,8 +1,8 @@
 # reading-pane
 
 A Claude Code mod that adds a **reading pane** beside the chat. The panel shows only
-what is meant for you to read: the messages you typed, and Claude's final answer to each
-one. Tool calls, command output, diffs and Claude's in-between notes stay in the main chat,
+what is meant for you to read: the messages you typed, and Claude's answer to each one.
+Tool calls, command output, diffs and Claude's short progress notes stay in the main chat,
 which is not changed. A resumed chat fills the panel from its history.
 
 ![The reading pane on the right shows only the question and Claude's answer, while the chat on the left shows all the work](docs/screenshot.png)
@@ -93,7 +93,7 @@ open, the key does its usual job there instead.
 
 ## What it reads, runs and sends
 
-- **Reads:** the messages of the current chat (yours, and Claude's final answers), only to
+- **Reads:** the messages of the current chat (yours, and Claude's answers), only to
   show them in the panel. It keeps them in memory for that session alone.
 - **Runs:** only inside Claude Code, on your computer. It writes no files and starts no
   programs.
@@ -110,7 +110,12 @@ All of them are in `hooks/register.tsx`.
   (3 seconds at most) until the window's width is known.
 - `prompt.submit`: copies the message you typed into the panel. The message itself is not
   changed.
-- `turn.complete`: copies Claude's final answer into the panel. The answer is not changed.
+- `turn.step`: reads each of Claude's responses as it ends, and keeps any longer text
+  written before a tool call as part of that turn's answer. The response is passed on
+  unchanged.
+- `turn.complete`: copies Claude's answer into the panel: its last text in the turn, after
+  any longer text kept from earlier in the turn. Short progress notes (one line of under 200
+  characters, written before a tool call) are left out. The answer itself is not changed.
 - `command.run`: answers only its own `/reading-pane` command, by showing or hiding the
   panel. Every other command passes through untouched.
 - `prompt.compose`: adds this one section at the end of Claude's system prompt, and changes
@@ -118,9 +123,12 @@ All of them are in `hooks/register.tsx`.
 
   > # Reading pane
   > The person may read this chat in a side panel that shows only their own messages and
-  > your final answer of each turn (the text of your last response in the turn). Make that
-  > final answer complete on its own: the outcome, what changed, and anything they must do.
-  > Do not point to tool output, diffs or notes "above": the panel does not show them.
+  > your answer of each turn: the text of your last response in the turn, plus any longer
+  > text you wrote earlier in the turn. Short progress notes before a tool call are left
+  > out. Write the answer last: finish any tool work first (saving notes, journal entries,
+  > commit messages), then write it. Make it complete on its own: the outcome, what changed,
+  > and anything they must do. Do not point to tool output, diffs or notes "above": the
+  > panel does not show them.
 
 - `ui.render`: draws the panel, and adds the **◧ reading pane** button at the end of the
   hint line under the prompt box. It changes no other part of the screen.
@@ -131,8 +139,8 @@ All of them are in `hooks/register.tsx`.
   On the main screen it opens above the prompt box instead.
 - A table in Claude's answer shows in the panel as a list, one line per row, because a
   table doesn't fit the panel's width. The main chat still shows the table.
-- The mod adds a short note to Claude's system prompt, asking it to make the last answer of
-  each turn complete on its own, since the panel shows nothing else.
+- The mod adds a short note to Claude's system prompt, asking it to write each turn's
+  answer last and make it complete on its own, since the panel shows nothing else.
 - It does nothing in non-interactive runs (`claude -p`).
 - It uses Claude Code's mod (function hooks) API, which is in early access and may change
   between releases. Built and tested on Claude Code 2.1.319.

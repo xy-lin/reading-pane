@@ -2,7 +2,16 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On, SessionMessage, UiPane } from 'claude-code'
 
-import { fromTranscript, nameOf, shareOf, stamp, tablesToLists, typed, widthFor } from '../hooks/register'
+import {
+  fromTranscript,
+  isProgressNote,
+  nameOf,
+  shareOf,
+  stamp,
+  tablesToLists,
+  typed,
+  widthFor,
+} from '../hooks/register'
 
 // A chat so far: context the engine added, a prompt, a note before a tool
 // call, the tool's result, the final answer, a background notice and its own
@@ -42,6 +51,9 @@ const PANE = {
   },
 } as const
 
+// What the model's steps answer in a test: their text, and how many tool calls.
+let steps: { answer: string; tools: number }[] = []
+
 // 21:10 on 6 Nov 2026, local time: the engine's clock in these tests.
 const NINE_TEN_PM = new Date(2026, 10, 6, 21, 10).getTime()
 
@@ -68,6 +80,18 @@ async function engine($: Engine, on: On, rows: SessionMessage[] = ROWS) {
   on('ui.scroll', () => ({}))
   on('prompt.submit', (_, e) => ({ text: e.text }))
   on('turn.complete', (_, e) => ({ text: e.answer }))
+  // Each model step answers with the text and tool calls the test set.
+  on('turn.step', async function* (_, e) {
+    const step = steps[e.index] ?? { answer: '', tools: 0 }
+    return {
+      turnId: e.turnId,
+      index: e.index,
+      answer: step.answer,
+      toolUses: Array.from({ length: step.tools }, () => ({ name: 'Bash', input: {} })),
+      stopReason: step.tools > 0 ? ('tool_use' as const) : ('end_turn' as const),
+      usage: null,
+    }
+  })
   // What the engine draws where the mod passes: the hint line's words.
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
@@ -318,4 +342,45 @@ test("the panel draws an answer's table as a list", async ($, on) => {
   const ui = await $.ui.mount(PANE)
   expect((await ui.find({ type: 'Markdown', text: /Two apps/ }))?.text).toMatch(/- \*\*Supabase\*\*: Use: Never/)
   await ui.unmount()
+})
+
+const LONG =
+  "You're right, and I'm sorry. I saw the warning at the first check and passed it on as a " +
+  'point for later. I should have said plainly that it would probably block the listing, ' +
+  'and checked it before you spent half an hour on the form.'
+
+test('a short note before a tool call is left out; longer text there is part of the answer', () => {
+  expect(isProgressNote('Checking the file.')).toBe(true)
+  expect(isProgressNote(LONG)).toBe(false)
+  expect(isProgressNote('My plan:\n1. Fix it.')).toBe(false)
+  const rows: SessionMessage[] = [
+    { role: 'user', text: 'why?', toolUses: [] },
+    { role: 'assistant', text: LONG, toolUses: [{ tool_use_id: 'w1', tool: 'Write', input: {} }] },
+    { role: 'user', text: '', toolUses: [], toolResults: [{ tool_use_id: 'w1', text: 'ok', isError: false }] },
+    { role: 'assistant', text: 'Saving it.', toolUses: [{ tool_use_id: 'b1', tool: 'Bash', input: {} }] },
+    { role: 'user', text: '', toolUses: [], toolResults: [{ tool_use_id: 'b1', text: 'ok', isError: false }] },
+    { role: 'assistant', text: 'The rule is saved.', toolUses: [] },
+  ]
+  expect(fromTranscript(rows).map(entry => entry.text)).toEqual(['why?', `${LONG}\n\nThe rule is saved.`])
+})
+
+test('the panel shows the whole answer of a turn, not only its last text', async ($, on) => {
+  steps = [
+    { answer: LONG, tools: 1 },
+    { answer: 'Saving it.', tools: 1 },
+    { answer: 'The rule is saved.', tools: 0 },
+  ]
+  await engine($, on, [])
+  for (const index of [0, 1, 2]) {
+    for await (const _ of $.turn.step({ turnId: 't1', index, model: 'opus', messageCount: 1 })) {
+      // the steps stream nothing here
+    }
+  }
+  await $.turn.complete(answer('The rule is saved.'))
+  const ui = await $.ui.mount(PANE)
+  const shown = await ui.find({ type: 'Markdown', text: /sorry/ })
+  expect(shown?.text).toContain('The rule is saved.')
+  expect(shown?.text).not.toContain('Saving it.')
+  await ui.unmount()
+  steps = []
 })
