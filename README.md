@@ -9,12 +9,6 @@ which is not changed.
 
 - Your messages sit in blue frames; Claude's answers sit in orange frames, drawn as
   Markdown. The colours follow your Claude Code theme.
-- Each message has a name and a time on its top row ("21:10", or "5 Nov 21:10" for an
-  earlier day). Messages rebuilt from an older chat's history have no time, because the
-  transcript does not keep one.
-- The panel opens on its own when the terminal is wide enough. It splits the window at
-  the golden section: the panel takes 38.2% and the chat 61.8%. It keeps that share when
-  you resize the window, and you can change it.
 - A resumed chat fills the panel from its history.
 
 ## Install
