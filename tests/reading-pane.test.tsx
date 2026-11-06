@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On, SessionMessage, UiPane } from 'claude-code'
 
-import { fromTranscript, nameOf, shareOf, stamp, typed, widthFor } from '../hooks/register'
+import { fromTranscript, nameOf, shareOf, stamp, tablesToLists, typed, widthFor } from '../hooks/register'
 
 // A chat so far: context the engine added, a prompt, a note before a tool
 // call, the tool's result, the final answer, a background notice and its own
@@ -279,4 +279,43 @@ test('a reload sizes the shown panel from the whole window, once', async ($, on)
   expect(log).toEqual(['open reading-pane 105', 'open reading-pane 105'])
   await chat.unmount()
   await pane.unmount()
+})
+
+test('a table shows as a list in the panel; code blocks stay as they are', () => {
+  const text = [
+    'Before.',
+    '',
+    '| App | Last used | My suggestion |',
+    '|---|---|---|',
+    '| Supabase | Never | Revoke |',
+    '| **GitHub CLI** | Within a week | Keep |',
+    '',
+    '```',
+    '| not | a | table |',
+    '|---|---|---|',
+    '```',
+    'After.',
+  ].join('\n')
+  expect(tablesToLists(text)).toBe(
+    [
+      'Before.',
+      '',
+      '- **Supabase**: Last used: Never; My suggestion: Revoke',
+      '- **GitHub CLI**: Last used: Within a week; My suggestion: Keep',
+      '',
+      '```',
+      '| not | a | table |',
+      '|---|---|---|',
+      '```',
+      'After.',
+    ].join('\n'),
+  )
+})
+
+test("the panel draws an answer's table as a list", async ($, on) => {
+  await engine($, on, [])
+  await $.turn.complete(answer('Two apps:\n\n| App | Use |\n|---|---|\n| Supabase | Never |'))
+  const ui = await $.ui.mount(PANE)
+  expect((await ui.find({ type: 'Markdown', text: /Two apps/ }))?.text).toMatch(/- \*\*Supabase\*\*: Use: Never/)
+  await ui.unmount()
 })

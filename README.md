@@ -129,6 +129,8 @@ All of them are in `hooks/register.tsx`.
 
 - The panel docks beside the chat in Claude Code's fullscreen layout, from 110 columns.
   On the main screen it opens above the prompt box instead.
+- A table in Claude's answer shows in the panel as a list, one line per row, because a
+  table doesn't fit the panel's width. The main chat still shows the table.
 - The mod adds a short note to Claude's system prompt, asking it to make the last answer of
   each turn complete on its own, since the panel shows nothing else.
 - It does nothing in non-interactive runs (`claude -p`).

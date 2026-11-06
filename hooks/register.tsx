@@ -81,6 +81,46 @@ export function stamp(at: number, now: number): string {
   return isToday ? time : `${d.getDate()} ${MONTHS[d.getMonth()]} ${time}`
 }
 
+// A Markdown table is too wide for the narrow panel, so the panel shows each
+// row as one list line instead: the first cell in bold, then each other cell
+// after its column's name. Text inside code blocks is left as it is.
+export function tablesToLists(text: string): string {
+  const isRow = (line: string) => /^\s*\|.*\|\s*$/.test(line)
+  const isRule = (line: string) => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(line)
+  const cells = (line: string) =>
+    line
+      .trim()
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split(/(?<!\\)\|/)
+      .map(cell => cell.trim().replace(/\\\|/g, '|'))
+  const lines = text.split('\n')
+  const out: string[] = []
+  let isCode = false
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? ''
+    if (/^\s*(```|~~~)/.test(line)) isCode = !isCode
+    const rule = lines[i + 1]
+    if (isCode || !isRow(line) || rule === undefined || !isRule(rule)) {
+      out.push(line)
+      continue
+    }
+    const head = cells(line)
+    i += 1
+    while (isRow(lines[i + 1] ?? '')) {
+      i += 1
+      const row = cells(lines[i] ?? '')
+      const label = (row[0] ?? '').replace(/^\*\*(.*)\*\*$/, '$1')
+      const rest = row
+        .slice(1)
+        .map((cell, k) => (head[k + 1] ? `${head[k + 1]}: ${cell}` : cell))
+        .filter(part => part.trim() !== '')
+      out.push(`- **${label}**${rest.length > 0 ? `: ${rest.join('; ')}` : ''}`)
+    }
+  }
+  return out.join('\n')
+}
+
 // The clean conversation so far, rebuilt from the transcript: each message the
 // person typed, and each turn's final answer. Text written before a tool call
 // is a note, not an answer, so it is left out.
@@ -363,7 +403,7 @@ export const register: Register = (on, options) => {
               paddingX={1}
             >
               {top(names.claude, ME, entry)}
-              <Markdown text={entry.text} />
+              <Markdown text={tablesToLists(entry.text)} />
             </Box>
           ),
         )}
