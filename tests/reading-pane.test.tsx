@@ -265,13 +265,18 @@ test('the "Panel width" setting changes the share', { options: { panelWidth: 30 
   await ui.unmount()
 })
 
-test('a narrower window sizes the panel again, keeping its share', async ($, on) => {
+test('a reload sizes the shown panel from the whole window, once', async ($, on) => {
   const { log, clock } = await engine($, on)
-  const wide = await $.ui.mount(hint(273))
-  await clock.advance(200)
-  await wide.unmount()
-  const narrow = await $.ui.mount(hint(200))
-  await clock.advance(1000)
-  expect(log).toEqual(['open reading-pane 104', 'open reading-pane 76'])
-  await narrow.unmount()
+  const first = await $.ui.mount(hint(274))
+  await clock.advance(200) // opens at 38.2% of 274 columns: 105
+  await first.unmount()
+  // Now docked: the chat column is narrower, and the panel says how wide it is.
+  const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 84 } })
+  const chat = await $.ui.mount(hint(187))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true }) // a reload
+  await clock.advance(5000)
+  // 187 + 84 + 3 = the same 274 columns, so the same 105, and nothing after it.
+  expect(log).toEqual(['open reading-pane 105', 'open reading-pane 105'])
+  await chat.unmount()
+  await pane.unmount()
 })

@@ -135,35 +135,51 @@ async function isShown($: EngineInterface) {
   return (await $.ui.panes()).some(one => one.id === PANE && one.isPlaced)
 }
 
-// The panel's share of the window ("Panel width" in /config), the window's
-// width as the hint line last saw it, and the width the panel was last sized
-// for. Set again at every load.
-const panel: { share: number; windowColumns?: number; sizedFor?: number } = {
+// The panel's share of the window ("Panel width" in /config), and what the
+// mod's drawings report of the window: the chat column's width (the hint line
+// is drawn in it) and the docked panel's width (0 when it isn't docked). The
+// window is the two together. Set again at every load.
+const panel: { share: number; chatColumns?: number; paneColumns?: number } = {
   share: GOLDEN / 100,
 }
 
-// Opens the panel at its share of the window, as wide as the window last seen.
-async function openSized($: EngineInterface, columns = panel.windowColumns) {
-  panel.sizedFor = columns
-  const opened = await openPanel($, panel.share, columns)
+// Columns the docked panel takes beside its body: the divider and its margin.
+const FRAME = 3
+
+// The window's width: the chat column alone while the panel doesn't show, the
+// chat column and the docked panel together while it does; undefined until
+// the drawings have told it.
+async function windowWidth($: EngineInterface) {
+  const chat = panel.chatColumns
+  if (chat === undefined) return undefined
+  if (!(await isShown($))) return chat
+  return panel.paneColumns === undefined ? undefined : chat + panel.paneColumns
+}
+
+// Opens the panel at its share of the window. Each open sizes it once; nothing
+// sizes it again by itself, so it never moves while you read.
+async function openSized($: EngineInterface, columns?: number) {
+  const opened = await openPanel($, panel.share, columns ?? (await windowWidth($)))
   if (opened.isPlaced) await showNewest($)
   return opened
 }
 
+// Opens the panel once the window's width is known, or anyway when `force`.
+async function tryOpen($: EngineInterface, force: boolean) {
+  const width = await windowWidth($)
+  if (width === undefined && !force) return false
+  await openSized($, width)
+  return true
+}
+
 // Closes the panel where it shows, else opens it: for the button and the command.
-async function toggle($: EngineInterface, columns = panel.windowColumns) {
+async function toggle($: EngineInterface, columns?: number) {
   if (await isShown($)) {
     await $.ui.close({ id: PANE })
     return 'closed' as const
   }
   await openSized($, columns)
   return 'opened' as const
-}
-
-// The window changed width: size the panel again, if it shows.
-async function resize($: EngineInterface) {
-  if (await isShown($)) await openSized($)
-  else panel.sizedFor = panel.windowColumns
 }
 
 let serial = 0 // keeps ids apart for messages that arrive in the same millisecond
@@ -183,8 +199,8 @@ export const register: Register = (on, options) => {
   }
 
   panel.share = shareOf(options.panelWidth)
-  panel.windowColumns = undefined
-  panel.sizedFor = undefined
+  panel.chatColumns = undefined
+  panel.paneColumns = undefined
 
   // False until session.start says so; `claude -p` runs stay untouched.
   let isInteractive = false
@@ -212,28 +228,30 @@ export const register: Register = (on, options) => {
     } catch {
       // keep what the panel had
     }
-    // Open once the window's width is known (the first drawing of the hint
-    // line tells it), or after 3 seconds without it. Opened unasked, the panel
-    // shows where the window is wide enough (144 columns, or 110 once the
-    // person has opened it by hand), else it waits.
+    // Open once the window's width is known (the drawings tell it), or after
+    // 3 seconds without it. Opened unasked, the panel shows where the window
+    // is wide enough (144 columns, or 110 once the person has opened it by
+    // hand), else it waits.
     let waited = 0
+    let isTrying = false
     const start = $.clock.every(200, () => {
+      if (isTrying) return
+      isTrying = true
       waited += 200
-      if (panel.windowColumns === undefined && waited < 3000) return
-      start.cancel()
-      openSized($).catch(() => undefined)
-    })
-    // Keep the panel's share of the window when the window's width changes.
-    $.clock.every(1000, () => {
-      const { windowColumns, sizedFor } = panel
-      if (sizedFor === undefined || windowColumns === undefined || windowColumns === sizedFor) return
-      resize($).catch(() => undefined)
+      tryOpen($, waited >= 3000)
+        .then(isOpened => {
+          if (isOpened) start.cancel()
+        })
+        .catch(() => start.cancel())
+        .finally(() => {
+          isTrying = false
+        })
     })
     return next(e)
   })
 
   on('command.run', { command: 'reading-pane' }, async ($, e) =>
-    (await toggle($, (panel.windowColumns = e.presentation.columns))) === 'closed'
+    (await toggle($, e.presentation.columns)) === 'closed'
       ? { text: 'Reading pane hidden.' }
       : { text: 'Reading pane shown.' },
   )
@@ -242,7 +260,9 @@ export const register: Register = (on, options) => {
   // the end. The button is always there, so its key works whether the panel
   // shows or not.
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
-    panel.windowColumns = e.viewport?.columns ?? panel.windowColumns
+    if (e.surface === 'terminal' && e.viewport !== undefined) {
+      panel.chatColumns = e.viewport.columns
+    }
     const line = await next(e)
     const { Box, Button } = $.ui.resolve(e)
     return (
@@ -301,6 +321,9 @@ export const register: Register = (on, options) => {
   // orange. The top row holds the name, and the time at the end of the row.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Markdown } = $.ui.resolve(e)
+    if (e.surface === 'terminal') {
+      panel.paneColumns = e.props.placement === 'dock' ? e.props.bodyColumns + FRAME : 0
+    }
     const list = await read($, entries)
     const now = Date.now()
     const top = (name: string, color: string, entry: Entry) => (

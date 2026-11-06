@@ -54,8 +54,9 @@ golden section, so the chat gets the other 61.8). Claude Code allows a panel at 
 2. Press `/` and type `width` to find **Panel width (%)**.
 3. Select it, type a number such as `33` or `45`, and press Enter.
 
-The panel changes to the new width straight away. If you resize the panel by hand (by
-dragging its edge), your width wins.
+The panel changes to the new width straight away. It is sized each time it opens, and
+then stays put: if you resize the window, hide and show the panel to fit it again. If you
+resize the panel by hand (by dragging its edge), your width wins.
 
 ### Set the shortcut key
 
@@ -105,8 +106,8 @@ open, the key does its usual job there instead.
 All of them are in `hooks/register.tsx`.
 
 - `session.start`: registers the `/reading-pane` command, rebuilds the panel from the
-  chat's messages, opens the panel once the window's width is known, and starts a timer
-  that keeps the panel's share of the window when you resize it.
+  chat's messages, and opens the panel at its share of the window. A short timer waits
+  (3 seconds at most) until the window's width is known.
 - `prompt.submit`: copies the message you typed into the panel. The message itself is not
   changed.
 - `turn.complete`: copies Claude's final answer into the panel. The answer is not changed.
