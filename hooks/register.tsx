@@ -1,16 +1,17 @@
-// clean-view: a panel beside the chat that shows only what is meant for the
+// reading-pane: a panel beside the chat that shows only what is meant for the
 // person to read: the messages they typed and Claude's final answer to each.
 //
-// The chat itself is unchanged. /clean, or the "◧ clean view" button on the
-// hint line under the prompt (and the key bound to it), opens or closes it.
+// The chat itself is unchanged. The "◧ reading pane" button at the end of the
+// hint line under the prompt (and the key bound to it) shows or hides the
+// panel; so does /reading-pane.
 
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionMessage } from 'claude-code'
 
 import type { Entry } from '../types'
 
-const PANE = 'clean-view'
-const TITLE = 'Clean view'
+const PANE = 'reading-pane'
+const TITLE = 'Reading pane'
 const KEEP = 200 // the panel keeps the last 200 messages
 
 // The panel's width, as a share of the window: the golden section unless set
@@ -48,12 +49,12 @@ const YOU = 'suggestion' // soft blue: the person's messages
 const ME = 'claude' // Claude orange: the answers
 
 // Change the tag when Entry changes: older stored values are then ignored.
-const entries = atom({ plugin: 'clean-view', key: 'entries' } as const, [], {
+const entries = atom({ plugin: 'reading-pane', key: 'entries' } as const, [], {
   shape: 'entries-1',
 })
 
 // Read by the model, so the last text of each turn makes sense on its own.
-const NOTE = `# Clean view panel
+const NOTE = `# Reading pane
 The person may read this chat in a side panel that shows only their own messages and your final answer of each turn (the text of your last response in the turn). Make that final answer complete on its own: the outcome, what changed, and anything they must do. Do not point to tool output, diffs or notes "above": the panel does not show them.`
 
 // What the person typed, without what the engine adds to a message. Undefined
@@ -149,7 +150,7 @@ async function openSized($: EngineInterface, columns = panel.windowColumns) {
   return opened
 }
 
-// Closes the panel where it shows, else opens it: for /clean and the button.
+// Closes the panel where it shows, else opens it: for the button and the command.
 async function toggle($: EngineInterface, columns = panel.windowColumns) {
   if (await isShown($)) {
     await $.ui.close({ id: PANE })
@@ -192,8 +193,8 @@ export const register: Register = (on, options) => {
     isInteractive = e.isInteractive
     if (!isInteractive) return next(e)
     await $.command.register({
-      name: 'clean',
-      description: 'Open or close the clean view panel (your messages and my answers only)',
+      name: 'reading-pane',
+      description: 'Show or hide the reading pane (your messages and my answers only)',
     })
     // Rebuilt at every start and reload, so a resumed chat fills the panel too.
     // The transcript keeps no times, so each message keeps the time the panel
@@ -231,10 +232,10 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  on('command.run', { command: 'clean' }, async ($, e) =>
+  on('command.run', { command: 'reading-pane' }, async ($, e) =>
     (await toggle($, (panel.windowColumns = e.presentation.columns))) === 'closed'
-      ? { text: 'Clean view panel closed. Type /clean to open it again.' }
-      : { text: 'Clean view panel opened.' },
+      ? { text: 'Reading pane hidden.' }
+      : { text: 'Reading pane shown.' },
   )
 
   // The hint line under the prompt keeps its words, with the panel's button at
@@ -249,7 +250,7 @@ export const register: Register = (on, options) => {
         {line}
         <Button
           key="toggle"
-          label="◧ clean view"
+          label="◧ reading pane"
           plain
           dimColor
           action={SHORTCUT}
@@ -292,7 +293,7 @@ export const register: Register = (on, options) => {
       return composed
     }
     return {
-      sections: [...composed.sections, { id: 'clean-view:note', text: NOTE, scope: 'session' }],
+      sections: [...composed.sections, { id: 'reading-pane:note', text: NOTE, scope: 'session' }],
     }
   })
 

@@ -5,7 +5,7 @@ export type Entry = { id: string; who: 'you' | 'claude'; text: string; at?: numb
 
 declare module 'claude-code' {
   interface PluginState {
-    'clean-view': {
+    'reading-pane': {
       // The clean conversation shown in the panel, oldest first.
       entries: Shaped<Entry[]>
     }

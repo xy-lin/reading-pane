@@ -1,6 +1,6 @@
-# clean-view
+# reading-pane
 
-A Claude Code mod that adds a **clean view panel** beside the chat. The panel shows only
+A Claude Code mod that adds a **reading pane** beside the chat. The panel shows only
 what is meant for you to read: the messages you typed, and Claude's final answer to each
 one. Tool calls, command output, diffs and Claude's in-between notes stay in the main chat,
 which is not changed.
@@ -20,7 +20,7 @@ which is not changed.
 At the prompt of a Claude Code terminal session:
 
 ```
-/plugin install clean-view --marketplace xy-lin/clean-view
+/plugin install reading-pane --marketplace xy-lin/reading-pane
 ```
 
 Answer `y` to add the marketplace, then pick a scope (the user scope loads it in every
@@ -29,17 +29,17 @@ session).
 From a shell:
 
 ```
-claude plugin install clean-view --marketplace xy-lin/clean-view
+claude plugin install reading-pane --marketplace xy-lin/reading-pane
 ```
 
 In the desktop app, where `/plugin` does not run: click **+** next to the prompt box, then
-**Plugins**, **Add marketplace** with `xy-lin/clean-view`, then **Add plugin**.
+**Plugins**, **Add marketplace** with `xy-lin/reading-pane`, then **Add plugin**.
 
 ## Usage
 
 ### Show or hide the panel
 
-- Click **◧ clean view** at the end of the hint line under the prompt box.
+- Click **◧ reading pane** at the end of the hint line under the prompt box.
 - Or press your shortcut key, once you have set one (see below).
 
 ### Set the names
@@ -67,7 +67,7 @@ dragging its edge), your width wins.
 
 ### Set the shortcut key
 
-A mod cannot add a key action of its own. Instead, the **◧ clean view** button borrows a
+A mod cannot add a key action of its own. Instead, the **◧ reading pane** button borrows a
 built-in action, `app:cycleDiffBase`, which Claude Code uses only while its diff panel is
 open. Any key you bind to that action shows or hides the panel.
 

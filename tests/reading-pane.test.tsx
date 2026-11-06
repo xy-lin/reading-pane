@@ -24,16 +24,16 @@ const ROWS: SessionMessage[] = [
   { role: 'assistant', text: 'Fixed: "recieve" is now "receive".', toolUses: [] },
   { role: 'user', text: '<task-notification>done</task-notification>', toolUses: [] },
   { role: 'assistant', text: 'The background job finished.', toolUses: [] },
-  { role: 'user', text: '<command-name>/clean</command-name>', toolUses: [] },
+  { role: 'user', text: '<command-name>/reading-pane</command-name>', toolUses: [] },
 ]
 
 const PANE = {
-  plugin: 'clean-view',
+  plugin: 'reading-pane',
   surface: 'terminal',
   component: 'Pane',
-  requestId: 'clean-view',
+  requestId: 'reading-pane',
   props: {
-    title: 'Clean view',
+    title: 'Reading pane',
     isFocused: false,
     bodyColumns: 60,
     placement: 'dock',
@@ -52,7 +52,7 @@ async function engine($: Engine, on: On, rows: SessionMessage[] = ROWS) {
   let panes: UiPane[] = []
   const clock = mock.clock(on, { now: NINE_TEN_PM })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('command.register', () => ({ value: { command: 'clean' } }))
+  on('command.register', () => ({ value: { command: 'reading-pane' } }))
   on('session.messages', () => ({ value: rows }))
   on('ui.open', (_, e) => {
     log.push(`open ${e.id} ${e.columns ?? '-'}`)
@@ -103,7 +103,7 @@ test('the transcript gives prompts and final answers, never notes', () => {
 test('only what the person typed counts as theirs', () => {
   expect(typed('hello <system-reminder>x</system-reminder>')).toBe('hello')
   expect(typed('<task-notification>x</task-notification>')).toBeUndefined()
-  expect(typed('/clean')).toBeUndefined()
+  expect(typed('/reading-pane')).toBeUndefined()
   expect(typed('[Request interrupted by user]')).toBeUndefined()
 })
 
@@ -111,7 +111,7 @@ test('the panel opens at the start and shows the chat so far', async ($, on) => 
   const { log, clock } = await engine($, on)
   // No drawing told the window's width: after 3 seconds it opens anyway.
   await clock.advance(3000)
-  expect(log).toEqual(['open clean-view -'])
+  expect(log).toEqual(['open reading-pane -'])
 
   const ui = await $.ui.mount(PANE)
   expect(await ui.find({ type: 'Text', text: /fix the typo/ })).toBeDefined()
@@ -125,7 +125,7 @@ test('new messages and answers are added; a subagent answer is not', async ($, o
   await $.prompt.submit(you('what is the weather?'))
   await $.turn.complete(answer('Sunny, 14°C.'))
   await $.turn.complete(answer('subagent report', 'agent-1'))
-  await $.prompt.submit({ ...you('/clean'), command: { name: 'clean', args: '' } })
+  await $.prompt.submit({ ...you('/reading-pane'), command: { name: 'reading-pane', args: '' } })
 
   const ui = await $.ui.mount(PANE)
   const mine = await ui.find({ type: 'Text', text: /what is the weather\?/ })
@@ -144,17 +144,17 @@ test('an empty panel says what will show there', async ($, on) => {
   await ui.unmount()
 })
 
-test('/clean closes the open panel, and opens it again', async ($, on) => {
+test('/reading-pane hides the panel, and shows it again', async ($, on) => {
   const { log, clock } = await engine($, on)
   await clock.advance(3000)
   const presentation = { isFullscreen: true, columns: 273 }
   const origin = { kind: 'composer' as const }
 
-  const closed = await $.command.run({ command: 'clean', args: '', origin, presentation })
-  expect(closed.text).toMatch(/closed/)
-  const opened = await $.command.run({ command: 'clean', args: '', origin, presentation })
-  expect(opened.text).toMatch(/opened/)
-  expect(log).toEqual(['open clean-view -', 'close clean-view', 'open clean-view 104'])
+  const closed = await $.command.run({ command: 'reading-pane', args: '', origin, presentation })
+  expect(closed.text).toMatch(/hidden/)
+  const opened = await $.command.run({ command: 'reading-pane', args: '', origin, presentation })
+  expect(opened.text).toMatch(/shown/)
+  expect(log).toEqual(['open reading-pane -', 'close reading-pane', 'open reading-pane 104'])
 })
 
 test('a time reads "21:10" today and "5 Nov 21:10" on an earlier day', () => {
@@ -190,7 +190,7 @@ test('a reload keeps the times; older messages show none', async ($, on) => {
 // The hint line under the prompt, in a window `columns` wide.
 function hint(columns = 273) {
   return {
-    plugin: 'clean-view',
+    plugin: 'reading-pane',
     surface: 'terminal',
     component: 'PromptHint',
     requestId: 'hint',
@@ -214,7 +214,7 @@ test('the button hides the panel, then shows it again', async ($, on) => {
   await clock.advance(200)
   await ui.press({ key: 'toggle' })
   await ui.press({ key: 'toggle' })
-  expect(log).toEqual(['open clean-view 76', 'close clean-view', 'open clean-view 76'])
+  expect(log).toEqual(['open reading-pane 76', 'close reading-pane', 'open reading-pane 76'])
   await ui.unmount()
 })
 
@@ -253,7 +253,7 @@ test('the panel opens at the golden section once the width is known', async ($, 
   const { log, clock } = await engine($, on)
   const ui = await $.ui.mount(hint(273))
   await clock.advance(200)
-  expect(log).toEqual(['open clean-view 104'])
+  expect(log).toEqual(['open reading-pane 104'])
   await ui.unmount()
 })
 
@@ -261,7 +261,7 @@ test('the "Panel width" setting changes the share', { options: { panelWidth: 30 
   const { log, clock } = await engine($, on)
   const ui = await $.ui.mount(hint(273))
   await clock.advance(200)
-  expect(log).toEqual(['open clean-view 82'])
+  expect(log).toEqual(['open reading-pane 82'])
   await ui.unmount()
 })
 
@@ -272,6 +272,6 @@ test('a narrower window sizes the panel again, keeping its share', async ($, on)
   await wide.unmount()
   const narrow = await $.ui.mount(hint(200))
   await clock.advance(1000)
-  expect(log).toEqual(['open clean-view 104', 'open clean-view 76'])
+  expect(log).toEqual(['open reading-pane 104', 'open reading-pane 76'])
   await narrow.unmount()
 })
