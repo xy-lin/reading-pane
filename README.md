@@ -97,8 +97,32 @@ open, the key does its usual job there instead.
 - **Runs:** only inside Claude Code, on your computer. It writes no files and starts no
   programs.
 - **Sends:** nothing. It makes no network requests.
-- **Changes:** it adds one short note to Claude's system prompt (see below), and nothing
+- **Changes:** it adds one short note to Claude's system prompt (quoted below), and nothing
   else in your settings.
+
+### What each hook does
+
+All of them are in `hooks/register.tsx`.
+
+- `session.start`: registers the `/reading-pane` command, rebuilds the panel from the
+  chat's messages, opens the panel once the window's width is known, and starts a timer
+  that keeps the panel's share of the window when you resize it.
+- `prompt.submit`: copies the message you typed into the panel. The message itself is not
+  changed.
+- `turn.complete`: copies Claude's final answer into the panel. The answer is not changed.
+- `command.run`: answers only its own `/reading-pane` command, by showing or hiding the
+  panel. Every other command passes through untouched.
+- `prompt.compose`: adds this one section at the end of Claude's system prompt, and changes
+  nothing else in it:
+
+  > # Reading pane
+  > The person may read this chat in a side panel that shows only their own messages and
+  > your final answer of each turn (the text of your last response in the turn). Make that
+  > final answer complete on its own: the outcome, what changed, and anything they must do.
+  > Do not point to tool output, diffs or notes "above": the panel does not show them.
+
+- `ui.render`: draws the panel, and adds the **◧ reading pane** button at the end of the
+  hint line under the prompt box. It changes no other part of the screen.
 
 ## Good to know
 

@@ -1,6 +1,6 @@
 {
   "name": "reading-pane",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "A reading pane beside the chat that shows only your messages and Claude's final answers.",
   "author": {
     "name": "xy-lin"
