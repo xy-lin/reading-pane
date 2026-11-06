@@ -1,8 +1,8 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On, SessionMessage, UiPane } from 'claude-code'
 
-import { fromTranscript, nameOf, stamp, typed } from '../hooks/register'
+import { fromTranscript, nameOf, shareOf, stamp, typed, widthFor } from '../hooks/register'
 
 // A chat so far: context the engine added, a prompt, a note before a tool
 // call, the tool's result, the final answer, a background notice and its own
@@ -45,15 +45,15 @@ const PANE = {
 // 21:10 on 6 Nov 2026, local time: the engine's clock in these tests.
 const NINE_TEN_PM = new Date(2026, 10, 6, 21, 10).getTime()
 
-// The engine beneath the mod, with a record of the panes it opened and closed.
+// The engine beneath the mod, with a record of the panes it opened (and the
+// width it asked for, "-" for none) and closed, and a clock the test moves.
 async function engine($: Engine, on: On, rows: SessionMessage[] = ROWS) {
   const log: string[] = []
   let panes: UiPane[] = []
-  let now = NINE_TEN_PM
+  const clock = mock.clock(on, { now: NINE_TEN_PM })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: { command: 'clean' } }))
   on('session.messages', () => ({ value: rows }))
-  on('clock.now', () => ({ value: (now += 1) }))
   on('ui.open', (_, e) => {
     log.push(`open ${e.id} ${e.columns ?? '-'}`)
     panes = [{ id: e.id, title: e.title ?? e.id, isShown: true, isFocused: false, isPlaced: true }]
@@ -74,7 +74,7 @@ async function engine($: Engine, on: On, rows: SessionMessage[] = ROWS) {
     return <Text dimColor>? for shortcuts</Text>
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  return log
+  return { log, clock }
 }
 
 function you(text: string) {
@@ -108,8 +108,10 @@ test('only what the person typed counts as theirs', () => {
 })
 
 test('the panel opens at the start and shows the chat so far', async ($, on) => {
-  const log = await engine($, on)
-  expect(log).toEqual(['open clean-view 1000'])
+  const { log, clock } = await engine($, on)
+  // No drawing told the window's width: after 3 seconds it opens anyway.
+  await clock.advance(3000)
+  expect(log).toEqual(['open clean-view -'])
 
   const ui = await $.ui.mount(PANE)
   expect(await ui.find({ type: 'Text', text: /fix the typo/ })).toBeDefined()
@@ -143,7 +145,8 @@ test('an empty panel says what will show there', async ($, on) => {
 })
 
 test('/clean closes the open panel, and opens it again', async ($, on) => {
-  const log = await engine($, on)
+  const { log, clock } = await engine($, on)
+  await clock.advance(3000)
   const presentation = { isFullscreen: true, columns: 273 }
   const origin = { kind: 'composer' as const }
 
@@ -151,7 +154,7 @@ test('/clean closes the open panel, and opens it again', async ($, on) => {
   expect(closed.text).toMatch(/closed/)
   const opened = await $.command.run({ command: 'clean', args: '', origin, presentation })
   expect(opened.text).toMatch(/opened/)
-  expect(log).toEqual(['open clean-view 1000', 'close clean-view', 'open clean-view 122'])
+  expect(log).toEqual(['open clean-view -', 'close clean-view', 'open clean-view 104'])
 })
 
 test('a time reads "21:10" today and "5 Nov 21:10" on an earlier day', () => {
@@ -184,17 +187,21 @@ test('a reload keeps the times; older messages show none', async ($, on) => {
   await ui.unmount()
 })
 
-const HINT = {
-  plugin: 'clean-view',
-  surface: 'terminal',
-  component: 'PromptHint',
-  requestId: 'hint',
-  props: { isDraft: false, isWorking: false, hint: '? for shortcuts' },
-} as const
+// The hint line under the prompt, in a window `columns` wide.
+function hint(columns = 273) {
+  return {
+    plugin: 'clean-view',
+    surface: 'terminal',
+    component: 'PromptHint',
+    requestId: 'hint',
+    props: { isDraft: false, isWorking: false, hint: '? for shortcuts' },
+    viewport: { columns, rows: 60, isFullscreen: true },
+  } as const
+}
 
 test('the hint line keeps its words and gains the panel button', async ($, on) => {
   await engine($, on)
-  const ui = await $.ui.mount(HINT)
+  const ui = await $.ui.mount(hint())
   expect(await ui.find({ type: 'Text', text: /for shortcuts/ })).toBeDefined()
   const button = await ui.find({ type: 'Button', key: 'toggle' })
   expect(button?.props.action).toBe('app:cycleDiffBase')
@@ -202,11 +209,12 @@ test('the hint line keeps its words and gains the panel button', async ($, on) =
 })
 
 test('the button hides the panel, then shows it again', async ($, on) => {
-  const log = await engine($, on)
-  const ui = await $.ui.mount(HINT)
+  const { log, clock } = await engine($, on)
+  const ui = await $.ui.mount(hint(200))
+  await clock.advance(200)
   await ui.press({ key: 'toggle' })
   await ui.press({ key: 'toggle' })
-  expect(log).toEqual(['open clean-view 1000', 'close clean-view', 'open clean-view 1000'])
+  expect(log).toEqual(['open clean-view 76', 'close clean-view', 'open clean-view 76'])
   await ui.unmount()
 })
 
@@ -227,4 +235,43 @@ test('the panel shows the names set in /config', { options: { yourName: 'Xinyu',
   expect((await ui.find({ type: 'Text', text: /^CASK$/ }))?.props.color).toBe('claude')
   expect(await ui.find({ type: 'Text', text: /^You$/ })).toBeUndefined()
   await ui.unmount()
+})
+
+test('the width: golden section by default, at most 45%', () => {
+  const percent = (value: unknown) => Math.round(shareOf(value) * 1000) / 10
+  expect(percent(undefined)).toBe(38.2)
+  expect(percent(30)).toBe(30)
+  expect(percent('40')).toBe(40)
+  expect(percent(60)).toBe(45)
+  expect(percent(0)).toBe(38.2)
+  expect(percent('wide')).toBe(38.2)
+  expect(widthFor(273, 0.382)).toBe(104)
+  expect(widthFor(40, 0.382)).toBe(24)
+})
+
+test('the panel opens at the golden section once the width is known', async ($, on) => {
+  const { log, clock } = await engine($, on)
+  const ui = await $.ui.mount(hint(273))
+  await clock.advance(200)
+  expect(log).toEqual(['open clean-view 104'])
+  await ui.unmount()
+})
+
+test('the "Panel width" setting changes the share', { options: { panelWidth: 30 } }, async ($, on) => {
+  const { log, clock } = await engine($, on)
+  const ui = await $.ui.mount(hint(273))
+  await clock.advance(200)
+  expect(log).toEqual(['open clean-view 82'])
+  await ui.unmount()
+})
+
+test('a narrower window sizes the panel again, keeping its share', async ($, on) => {
+  const { log, clock } = await engine($, on)
+  const wide = await $.ui.mount(hint(273))
+  await clock.advance(200)
+  await wide.unmount()
+  const narrow = await $.ui.mount(hint(200))
+  await clock.advance(1000)
+  expect(log).toEqual(['open clean-view 104', 'open clean-view 76'])
+  await narrow.unmount()
 })

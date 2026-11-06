@@ -1,6 +1,6 @@
 {
   "name": "clean-view",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A panel beside the chat that shows only your messages and Claude's final answers. /clean opens or closes it.",
   "author": {
     "name": "xy-lin"
@@ -20,6 +20,12 @@
       "title": "Claude's name",
       "description": "The name above Claude's answers in the clean view panel.",
       "default": "Claude"
+    },
+    "panelWidth": {
+      "type": "number",
+      "title": "Panel width (%)",
+      "description": "The panel's share of the window, in percent. 38.2 is the golden section: the chat gets the other 61.8. The app allows at most 45.",
+      "default": 38.2
     }
   },
   "types": "./types/index.d.ts"

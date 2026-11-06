@@ -10,8 +10,9 @@ which is not changed.
 - Each message has a name and a time on its top row ("21:10", or "5 Nov 21:10" for an
   earlier day). Messages rebuilt from an older chat's history have no time, because the
   transcript does not keep one.
-- The panel opens on its own when the terminal is wide enough, and asks for the widest
-  panel Claude Code allows: 45% of the window.
+- The panel opens on its own when the terminal is wide enough. It splits the window at
+  the golden section: the panel takes 38.2% and the chat 61.8%. It keeps that share when
+  you resize the window, and you can change it.
 - A resumed chat fills the panel from its history.
 
 ## Install
@@ -54,6 +55,18 @@ Claude Code asks for both names when you install the mod. To change them later:
 3. Select one, type the new name, and press Enter.
 
 The panel shows the new names straight away.
+
+### Set the panel width
+
+The panel's width is a share of the window, in percent: 38.2 unless you change it (the
+golden section, so the chat gets the other 61.8). Claude Code allows a panel at most 45%.
+
+1. Type `/config` and press Enter.
+2. Press `/` and type `width` to find **Panel width (%)**.
+3. Select it, type a number such as `33` or `45`, and press Enter.
+
+The panel changes to the new width straight away. If you resize the panel by hand (by
+dragging its edge), your width wins.
 
 ### Set the shortcut key
 

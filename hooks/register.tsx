@@ -13,10 +13,23 @@ const PANE = 'clean-view'
 const TITLE = 'Clean view'
 const KEEP = 200 // the panel keeps the last 200 messages
 
-// The app lets a panel take at most 45% of the window, so the panel asks for
-// that much; a bigger ask is cut down to it.
-const SHARE = 0.45
-const WIDEST = 1000
+// The panel's width, as a share of the window: the golden section unless set
+// in /config ("Panel width"), so the panel takes 38.2% and the chat 61.8%.
+// The app allows a panel at most 45% of the window.
+const GOLDEN = 38.2
+const MOST = 45
+
+// The "Panel width" setting as a share: a percentage up to 45, else golden.
+export function shareOf(value: unknown): number {
+  const n =
+    typeof value === 'number' ? value : typeof value === 'string' ? Number.parseFloat(value) : Number.NaN
+  return (Number.isFinite(n) && n > 0 ? Math.min(n, MOST) : GOLDEN) / 100
+}
+
+// The panel's width in columns for a window `columns` wide: at least 24.
+export function widthFor(columns: number, share: number): number {
+  return Math.max(24, Math.round(columns * share))
+}
 
 // The key that shows or hides the panel. A mod cannot add a key action of its
 // own, so the hint-line button borrows this one: the engine handles it only
@@ -96,12 +109,12 @@ export function fromTranscript(rows: readonly SessionMessage[]): Entry[] {
   return out
 }
 
-// Opens the panel as wide as the app allows. `columns` is the window's width
-// when known; else the ask is cut down to the limit by the app itself.
-async function openPanel($: EngineInterface, columns?: number) {
-  const wide = columns === undefined ? WIDEST : Math.max(24, Math.floor(columns * SHARE))
+// Opens the panel at its share of a window `columns` wide; with the width not
+// known, at the app's own default width.
+async function openPanel($: EngineInterface, share: number, columns?: number) {
+  const ask = columns === undefined ? {} : { columns: widthFor(columns, share) }
   try {
-    return await $.ui.open({ id: PANE, title: TITLE, columns: wide })
+    return await $.ui.open({ id: PANE, title: TITLE, ...ask })
   } catch {
     return await $.ui.open({ id: PANE, title: TITLE })
   }
@@ -116,21 +129,47 @@ async function showNewest($: EngineInterface) {
   }
 }
 
-// Closes the panel where it shows, else opens it: for /clean and the button.
-async function toggle($: EngineInterface, columns?: number): Promise<'opened' | 'closed'> {
-  const pane = (await $.ui.panes()).find(one => one.id === PANE)
-  if (pane?.isPlaced === true) {
-    await $.ui.close({ id: PANE })
-    return 'closed'
-  }
-  await openPanel($, columns)
-  await showNewest($)
-  return 'opened'
+// Whether the panel shows now.
+async function isShown($: EngineInterface) {
+  return (await $.ui.panes()).some(one => one.id === PANE && one.isPlaced)
 }
+
+// The panel's share of the window ("Panel width" in /config), the window's
+// width as the hint line last saw it, and the width the panel was last sized
+// for. Set again at every load.
+const panel: { share: number; windowColumns?: number; sizedFor?: number } = {
+  share: GOLDEN / 100,
+}
+
+// Opens the panel at its share of the window, as wide as the window last seen.
+async function openSized($: EngineInterface, columns = panel.windowColumns) {
+  panel.sizedFor = columns
+  const opened = await openPanel($, panel.share, columns)
+  if (opened.isPlaced) await showNewest($)
+  return opened
+}
+
+// Closes the panel where it shows, else opens it: for /clean and the button.
+async function toggle($: EngineInterface, columns = panel.windowColumns) {
+  if (await isShown($)) {
+    await $.ui.close({ id: PANE })
+    return 'closed' as const
+  }
+  await openSized($, columns)
+  return 'opened' as const
+}
+
+// The window changed width: size the panel again, if it shows.
+async function resize($: EngineInterface) {
+  if (await isShown($)) await openSized($)
+  else panel.sizedFor = panel.windowColumns
+}
+
+let serial = 0 // keeps ids apart for messages that arrive in the same millisecond
 
 async function add($: EngineInterface, who: Entry['who'], text: string) {
   const at = await $.clock.now()
-  const id = `${who}-${at}`
+  const id = `${who}-${at}-${serial++}`
   await update($, entries, list => [...list, { id, who, text, at }].slice(-KEEP))
   await showNewest($)
 }
@@ -141,6 +180,10 @@ export const register: Register = (on, options) => {
     you: nameOf(options.yourName, 'You'),
     claude: nameOf(options.claudeName, 'Claude'),
   }
+
+  panel.share = shareOf(options.panelWidth)
+  panel.windowColumns = undefined
+  panel.sizedFor = undefined
 
   // False until session.start says so; `claude -p` runs stay untouched.
   let isInteractive = false
@@ -168,15 +211,28 @@ export const register: Register = (on, options) => {
     } catch {
       // keep what the panel had
     }
-    // Opened unasked: it shows where the terminal is wide enough (144 columns,
-    // or 110 once the person has opened it with /clean), else it waits.
-    const opened = await openPanel($)
-    if (opened.isPlaced) await showNewest($)
+    // Open once the window's width is known (the first drawing of the hint
+    // line tells it), or after 3 seconds without it. Opened unasked, the panel
+    // shows where the window is wide enough (144 columns, or 110 once the
+    // person has opened it by hand), else it waits.
+    let waited = 0
+    const start = $.clock.every(200, () => {
+      waited += 200
+      if (panel.windowColumns === undefined && waited < 3000) return
+      start.cancel()
+      openSized($).catch(() => undefined)
+    })
+    // Keep the panel's share of the window when the window's width changes.
+    $.clock.every(1000, () => {
+      const { windowColumns, sizedFor } = panel
+      if (sizedFor === undefined || windowColumns === undefined || windowColumns === sizedFor) return
+      resize($).catch(() => undefined)
+    })
     return next(e)
   })
 
   on('command.run', { command: 'clean' }, async ($, e) =>
-    (await toggle($, e.presentation.columns)) === 'closed'
+    (await toggle($, (panel.windowColumns = e.presentation.columns))) === 'closed'
       ? { text: 'Clean view panel closed. Type /clean to open it again.' }
       : { text: 'Clean view panel opened.' },
   )
@@ -185,6 +241,7 @@ export const register: Register = (on, options) => {
   // the end. The button is always there, so its key works whether the panel
   // shows or not.
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
+    panel.windowColumns = e.viewport?.columns ?? panel.windowColumns
     const line = await next(e)
     const { Box, Button } = $.ui.resolve(e)
     return (
