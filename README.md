@@ -9,6 +9,9 @@ which is not changed. A resumed chat fills the panel from its history.
 
 ## Install
 
+Needs Claude Code 2.1.287 or later: mods are on by default from that version. Check yours
+with `claude --version`.
+
 At the prompt of a Claude Code terminal session:
 
 ```
